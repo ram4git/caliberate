@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Vision Calibration & Click Target Playground</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Base page configuration for stable, scroll-free layout coordinates */
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            width: 100vw;
+            height: 100vh;
+            background-color: #ffffff;
+            transition: background-color 0.3s ease;
+            user-select: none;
+            font-family: ui-sans-serif, system-ui, sans-serif;
+        }
+
+        /* Success green state backdrop */
+        body.success-state {
+            background-color: #bbf7d0 !important; /* Tailwind green-200 */
+        }
+
+        /* Precise CSS grid matching CSS pixels exactly */
+        #grid-viewport {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background-image: 
+                /* 10px light gray grid lines */
+                linear-gradient(to right, rgba(0, 0, 0, 0.04) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(0, 0, 0, 0.04) 1px, transparent 1px),
+                /* 50px darker gray grid lines */
+                linear-gradient(to right, rgba(0, 0, 0, 0.12) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(0, 0, 0, 0.12) 1px, transparent 1px);
+            background-size: 10px 10px, 10px 10px, 50px 50px, 50px 50px;
+            background-position: 0px 0px;
+            pointer-events: auto;
+        }
+
+        /* Custom scrollbar config (viewport itself will never scroll) */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(156, 163, 175, 0.5);
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body class="relative">
+
+    <!-- Primary Click Capture Viewport and Grid lines -->
+    <div id="grid-viewport" class="relative">
+        <!-- Containers dynamically populated via JS -->
+        <div id="grid-labels" class="absolute inset-0 pointer-events-none"></div>
+        <div id="markers-layer" class="absolute inset-0 pointer-events-none"></div>
+        
+        <!-- Interactive Target Checkbox Container: Centered exactly at coordinates -->
+        <div id="target-container" class="absolute" style="display: none; z-index: 40; width: 0; height: 0;">
+            <!-- Interactive Checkbox centered EXACTLY at (0,0) offset -->
+            <input type="checkbox" id="target-checkbox" class="absolute -translate-x-1/2 -translate-y-1/2 w-7 h-7 rounded-lg border-2 border-emerald-500 text-emerald-600 focus:ring-emerald-400 cursor-pointer accent-emerald-500 z-10 pointer-events-auto shadow-md transition-transform active:scale-90">
+            
+            <!-- Subtle pulsing center validation ring -->
+            <div class="absolute -translate-x-1/2 -translate-y-1/2 w-10 h-10 bg-emerald-400/25 rounded-full animate-ping pointer-events-none"></div>
+
+            <!-- Target Coordinate Label Card: Positioned strictly above the checkbox to keep click targets clear -->
+            <div class="absolute bottom-6 left-1/2 -translate-x-1/2 bg-white/95 backdrop-blur border border-emerald-500/80 rounded-lg p-1.5 px-2.5 shadow-lg flex flex-col items-center gap-0.5 whitespace-nowrap pointer-events-auto">
+                <span class="text-[8px] uppercase tracking-wider text-gray-400 font-bold select-none">Target Center</span>
+                <span id="target-coords" class="text-[11px] font-mono font-black text-emerald-600 select-all">--</span>
+                <!-- Down pointing alignment indicator -->
+                <div class="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-l-[4px] border-l-transparent border-r-[4px] border-r-transparent border-t-[5px] border-t-emerald-500/80"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- UI Overlay Block - Dashboard Modal (Initially Hidden, Toggleable) -->
+    <div id="dashboard-modal" class="ui-exclude hidden absolute top-4 right-4 bg-white/95 backdrop-blur-md border border-gray-200 rounded-xl shadow-xl p-4 w-80 z-50 pointer-events-auto transition-all duration-200">
+        <div class="flex items-center justify-between border-b pb-2 mb-3">
+            <h3 class="font-bold text-gray-800 text-sm flex items-center gap-2">
+                <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                AI Agent Lab Dashboard
+            </h3>
+            <button id="close-dash-btn" class="text-gray-400 hover:text-gray-600 font-bold text-sm">✕</button>
+        </div>
+
+        <div class="space-y-2.5 text-xs text-gray-600">
+            <div class="flex justify-between items-center bg-gray-50 p-2 rounded">
+                <span class="font-medium text-gray-500">Screen Resolution:</span>
+                <span id="resolution-badge" class="font-mono font-bold text-gray-700">0x0</span>
+            </div>
+            <div class="flex justify-between items-center bg-gray-50 p-2 rounded">
+                <span class="font-medium text-gray-500">Active Test Target:</span>
+                <span id="dash-target-pos" class="font-mono font-bold text-emerald-600">Inactive</span>
+            </div>
+            <div class="flex justify-between items-center bg-gray-50 p-2 rounded">
+                <span class="font-medium text-gray-500">Latest Click Pos:</span>
+                <span id="dash-latest-click" class="font-mono font-bold text-indigo-600">None</span>
+            </div>
+            <div class="flex justify-between items-center bg-gray-50 p-2 rounded">
+                <span class="font-medium text-gray-500">Total Click Count:</span>
+                <span id="dash-click-count" class="font-mono font-bold text-gray-700">0</span>
+            </div>
+        </div>
+
+        <!-- Debug / Simulation Actions -->
+        <div class="mt-4 pt-3 border-t">
+            <p class="text-[11px] font-bold text-gray-400 tracking-wider uppercase mb-2">Simulate Agent Coordinates</p>
+            <div class="flex gap-2">
+                <input id="sim-x" type="number" placeholder="X (px)" class="w-1/2 bg-gray-50 border border-gray-300 rounded px-2 py-1 text-xs font-mono text-gray-700 focus:outline-none focus:border-indigo-500" min="0">
+                <input id="sim-y" type="number" placeholder="Y (px)" class="w-1/2 bg-gray-50 border border-gray-300 rounded px-2 py-1 text-xs font-mono text-gray-700 focus:outline-none focus:border-indigo-500" min="0">
+            </div>
+            <button id="sim-btn" class="w-full mt-2 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white font-bold py-1.5 rounded text-xs tracking-wide transition shadow-sm">
+                Inject Programmatic Click
+            </button>
+        </div>
+
+        <!-- Diagnostics Log -->
+        <div class="mt-3 pt-3 border-t">
+            <div class="flex justify-between items-center mb-1">
+                <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Events & Action Log</span>
+                <button id="clear-log-btn" class="text-[10px] text-gray-400 hover:text-red-500 underline">Clear</button>
+            </div>
+            <div id="log-panel" class="h-24 overflow-y-auto bg-gray-900 rounded p-1.5 font-mono text-[9px] text-emerald-400 space-y-1">
+                <div class="text-gray-500">&gt; Calibration System Ready.</div>
+            </div>
+        </div>
+        
+        <!-- Toggle Sounds -->
+        <div class="mt-3 flex items-center justify-between text-[11px] text-gray-400">
+            <span>Audio Feedback Controls</span>
+            <label class="relative inline-flex items-center cursor-pointer">
+                <input type="checkbox" id="sound-toggle" class="sr-only peer" checked>
+                <div class="w-7 h-4 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-emerald-500"></div>
+            </label>
+        </div>
+    </div>
+
+    <!-- UI Overlay Block - Bottom Controller Bar (Bottom Center - Made Smaller) -->
+    <div class="ui-exclude absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-white/90 backdrop-blur border border-gray-200/80 rounded-xl shadow-lg p-2 z-50 pointer-events-auto flex gap-2 items-center">
+        <button id="test-btn" class="bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white font-semibold px-3 py-1.5 rounded-lg text-xs transition duration-150 shadow-sm flex items-center gap-1.5">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>
+            Test Target
+        </button>
+        
+        <button id="reset-btn" class="bg-gray-50 hover:bg-gray-150 active:bg-gray-200 text-gray-700 font-semibold px-3 py-1.5 rounded-lg text-xs transition duration-150 border border-gray-350 shadow-sm flex items-center gap-1.5">
+            <svg class="w-3.5 h-3.5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 8H17"/></svg>
+            Reset Arena
+        </button>
+
+        <button id="dash-toggle-btn" class="bg-gray-800 hover:bg-gray-950 active:bg-black text-white font-semibold px-3 py-1.5 rounded-lg text-xs transition duration-150 shadow-sm flex items-center gap-1.5">
+            <svg class="w-3.5 h-3.5 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 002 2h2a2 2 0 002-2z"/></svg>
+            Dashboard
+        </button>
+    </div>
+
+    <!-- UI Overlay Block - Real Estate Resolution Indicator (Bottom Right Corner) -->
+    <div id="resolution-badge-br" class="ui-exclude fixed bottom-4 right-4 bg-gray-900/85 backdrop-blur text-emerald-400 border border-gray-700/50 px-2.5 py-1.5 rounded-lg text-xs font-mono shadow-md z-50 pointer-events-none flex items-center gap-1.5">
+        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+        <span id="resolution-dims">0 x 0 px</span>
+    </div>
+
+    <script>
+        // Core Web Audio Orchestrator for real-time auditory confirmation (no dependencies)
+        let audioCtx = null;
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+        }
+
+        function playSound(type) {
+            const toggle = document.getElementById('sound-toggle');
+            if (toggle && !toggle.checked) return;
+            initAudio();
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+
+            if (type === 'click') {
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(800, audioCtx.currentTime);
+                gain.gain.setValueAtTime(0.04, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.08);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.08);
+            } else if (type === 'success') {
+                // Harmonic success chord (Arpeggio)
+                const osc2 = audioCtx.createOscillator();
+                const gain2 = audioCtx.createGain();
+                osc2.connect(gain2);
+                gain2.connect(audioCtx.destination);
+
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(523.25, audioCtx.currentTime); // C5
+                gain.gain.setValueAtTime(0.05, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.4);
+
+                osc2.type = 'sine';
+                osc2.frequency.setValueAtTime(659.25, audioCtx.currentTime + 0.06); // E5
+                gain2.gain.setValueAtTime(0.05, audioCtx.currentTime + 0.06);
+                gain2.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.46);
+
+                osc.start();
+                osc2.start(audioCtx.currentTime + 0.06);
+                osc.stop(audioCtx.currentTime + 0.4);
+                osc2.stop(audioCtx.currentTime + 0.46);
+            } else if (type === 'spawn') {
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(440, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(880, audioCtx.currentTime + 0.15);
+                gain.gain.setValueAtTime(0.03, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.15);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.15);
+            }
+        }
+
+        // Global State
+        let clickCount = 0;
+        let targetPosition = { x: 0, y: 0 };
+        let isTargetActive = false;
+
+        // Visual Coordinates Label System
+        function updateRulerLabels() {
+            const container = document.getElementById('grid-labels');
+            if (!container) return;
+            container.innerHTML = '';
+            const width = window.innerWidth;
+            const height = window.innerHeight;
+
+            // Update bottom right resolution indicators
+            const resString = `${width} × ${height} px`;
+            const dimsElement = document.getElementById('resolution-dims');
+            if (dimsElement) {
+                dimsElement.innerText = resString;
+            }
+            
+            // Also keep internal label synchronized if dashboard exists
+            const badgeElement = document.getElementById('resolution-badge');
+            if (badgeElement) {
+                badgeElement.innerText = `${width}x${height}`;
+            }
+
+            // X-Axis coordinates markers along top and bottom (every 100th pixel)
+            for (let x = 100; x < width; x += 100) {
+                const textLabel = document.createElement('div');
+                textLabel.className = 'absolute text-[9px] font-mono font-semibold text-gray-400 pointer-events-none select-none border-l border-gray-300 pl-1 h-3';
+                textLabel.style.left = `${x}px`;
+                textLabel.style.top = '2px';
+                textLabel.innerText = x;
+                container.appendChild(textLabel);
+            }
+
+            // Y-Axis coordinates markers along left and right (every 100th pixel)
+            for (let y = 100; y < height; y += 100) {
+                const textLabel = document.createElement('div');
+                textLabel.className = 'absolute text-[9px] font-mono font-semibold text-gray-400 pointer-events-none select-none border-t border-gray-300 pt-0.5 pl-1 w-8';
+                textLabel.style.left = '2px';
+                textLabel.style.top = `${y}px`;
+                textLabel.innerText = y;
+                container.appendChild(textLabel);
+            }
+        }
+
+        // Write actions to diagnostics panel
+        function logAction(message, colorClass = 'text-emerald-400') {
+            const panel = document.getElementById('log-panel');
+            if (!panel) return;
+            const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            panel.innerHTML += `<div class="${colorClass}">&gt; [${timeStr}] ${message}</div>`;
+            panel.scrollTop = panel.scrollHeight;
+        }
+
+        // Generate coordinates logic for random placement
+        function getRandomPosition() {
+            // Safe space padding to prevent overlapping with bottom center controls & corner UI
+            // Added extra top vertical padding to safely account for label tags floating above target center
+            const paddingX = 120;
+            const paddingY = 140;
+
+            const minX = paddingX;
+            const maxX = window.innerWidth - paddingX;
+            const minY = paddingY;
+            const maxY = window.innerHeight - paddingY - 50;
+
+            const finalMinX = maxX > minX ? minX : 50;
+            const finalMaxX = maxX > minX ? maxX : window.innerWidth - 50;
+            const finalMinY = maxY > minY ? minY : 50;
+            const finalMaxY = maxY > minY ? maxY : window.innerHeight - 50;
+
+            const randomX = Math.floor(Math.random() * (finalMaxX - finalMinX + 1) + finalMinX);
+            const randomY = Math.floor(Math.random() * (finalMaxY - finalMinY + 1) + finalMinY);
+            
+            return { x: randomX, y: randomY };
+        }
+
+        // Add a green marker at specified location
+        function addMarker(x, y, isProgrammatic = false) {
+            clickCount++;
+            
+            const countElem = document.getElementById('dash-click-count');
+            if (countElem) countElem.innerText = clickCount;
+            
+            const clickElem = document.getElementById('dash-latest-click');
+            if (clickElem) clickElem.innerText = `(${x}, ${y})`;
+
+            const layer = document.getElementById('markers-layer');
+            if (!layer) return;
+            const marker = document.createElement('div');
+            
+            // Set marker container to absolute zero-size base for pixel-exact offsets
+            marker.className = 'absolute pointer-events-none select-none w-0 h-0';
+            marker.style.left = `${x}px`;
+            marker.style.top = `${y}px`;
+
+            // High Precision crosshair with offset and transparent label
+            marker.innerHTML = `
+                <!-- Crosshair container (Centered exactly at clicked x,y coordinate) -->
+                <div class="absolute -translate-x-1/2 -translate-y-1/2 flex items-center justify-center w-6.5 h-6.5">
+                    <!-- Core high-contrast green center pixel point -->
+                    <div class="w-1 h-1 bg-emerald-500 rounded-full border border-white z-10"></div>
+                    <!-- Horizontal hair line -->
+                    <div class="absolute w-5 h-[2px] bg-emerald-500"></div>
+                    <!-- Vertical hair line -->
+                    <div class="absolute w-[2px] h-5 bg-emerald-500"></div>
+                </div>
+                
+                <!-- Precision coordinate text (Offset bottom-right, smaller, transparent bg) -->
+                <div class="absolute left-3 top-3 bg-transparent text-emerald-600 font-mono text-[8px] font-extrabold select-none whitespace-nowrap tracking-tighter">
+                    ${isProgrammatic ? '🤖 ' : ''}(${x}, ${y})
+                </div>
+            `;
+
+            layer.appendChild(marker);
+            playSound('click');
+            
+            const originStr = isProgrammatic ? "Programmatic injection" : "User/Agent click";
+            logAction(`${originStr} recorded at (${x}, ${y})`, 'text-indigo-400');
+        }
+
+        // Handle viewport-wide clicking
+        document.getElementById('grid-viewport').addEventListener('click', function(e) {
+            // Guarantee we don't handle clicks intended for control buttons or UI overlay cards
+            if (e.target.closest('.ui-exclude')) {
+                return; 
+            }
+
+            addMarker(e.clientX, e.clientY, false);
+        });
+
+        // Initialize / Reposition active target Checkbox
+        function spawnTarget() {
+            const targetElement = document.getElementById('target-container');
+            const checkbox = document.getElementById('target-checkbox');
+            if (!targetElement || !checkbox) return;
+            
+            // Generate position
+            targetPosition = getRandomPosition();
+            isTargetActive = true;
+
+            // Reset checkbox state
+            checkbox.checked = false;
+            document.body.classList.remove('success-state');
+
+            // Apply positions
+            targetElement.style.left = `${targetPosition.x}px`;
+            targetElement.style.top = `${targetPosition.y}px`;
+            targetElement.style.display = 'block';
+
+            // Update UI indicators
+            const coordsElement = document.getElementById('target-coords');
+            if (coordsElement) coordsElement.innerText = `${targetPosition.x}, ${targetPosition.y}`;
+            
+            const dashTargetElement = document.getElementById('dash-target-pos');
+            if (dashTargetElement) dashTargetElement.innerText = `(${targetPosition.x}, ${targetPosition.y})`;
+
+            playSound('spawn');
+            logAction(`New target checkbox placed at (${targetPosition.x}, ${targetPosition.y})`, 'text-emerald-400');
+        }
+
+        // Success Checkbox Change State Handler
+        document.getElementById('target-checkbox').addEventListener('change', function(e) {
+            if (e.target.checked) {
+                document.body.classList.add('success-state');
+                playSound('success');
+                logAction(`TARGET CHECKBOX SUCCESSFULLY CHECKED AT (${targetPosition.x}, ${targetPosition.y})!`, 'text-green-500 font-bold bg-green-950/20 px-1 rounded');
+            } else {
+                document.body.classList.remove('success-state');
+                logAction('Target checkbox unchecked.', 'text-gray-400');
+            }
+        });
+
+        // Toggle Dashboard Modal Visibility
+        const dashToggleBtn = document.getElementById('dash-toggle-btn');
+        const dashboardModal = document.getElementById('dashboard-modal');
+        const closeDashBtn = document.getElementById('close-dash-btn');
+
+        function toggleDashboard() {
+            if (!dashboardModal || !dashToggleBtn) return;
+            dashboardModal.classList.toggle('hidden');
+            const isHidden = dashboardModal.classList.contains('hidden');
+            if (isHidden) {
+                dashToggleBtn.classList.remove('bg-indigo-600', 'hover:bg-indigo-700');
+                dashToggleBtn.classList.add('bg-gray-800', 'hover:bg-gray-950');
+            } else {
+                dashToggleBtn.classList.remove('bg-gray-800', 'hover:bg-gray-950');
+                dashToggleBtn.classList.add('bg-indigo-600', 'hover:bg-indigo-700');
+            }
+        }
+
+        if (dashToggleBtn) dashToggleBtn.addEventListener('click', toggleDashboard);
+        if (closeDashBtn) closeDashBtn.addEventListener('click', toggleDashboard);
+
+        // Test Action Trigger
+        document.getElementById('test-btn').addEventListener('click', function() {
+            spawnTarget();
+        });
+
+        // Reset All Controls
+        document.getElementById('reset-btn').addEventListener('click', function() {
+            // Clean markers
+            const layer = document.getElementById('markers-layer');
+            if (layer) layer.innerHTML = '';
+            clickCount = 0;
+            
+            const countElem = document.getElementById('dash-click-count');
+            if (countElem) countElem.innerText = '0';
+            
+            const clickElem = document.getElementById('dash-latest-click');
+            if (clickElem) clickElem.innerText = 'None';
+            
+            // Clean success background to default
+            document.body.classList.remove('success-state');
+
+            // Force spawn a fresh randomized target
+            spawnTarget();
+
+            logAction('Arena cleared and reset completed.', 'text-amber-500');
+        });
+
+        // Debug programmatic coordinate injection 
+        document.getElementById('sim-btn').addEventListener('click', function() {
+            const inputX = document.getElementById('sim-x').value;
+            const inputY = document.getElementById('sim-y').value;
+
+            if (inputX === '' || inputY === '') {
+                logAction('Error: Please enter both X and Y simulation values.', 'text-red-400');
+                return;
+            }
+
+            const x = parseInt(inputX);
+            const y = parseInt(inputY);
+
+            if (isNaN(x) || isNaN(y) || x < 0 || y < 0 || x > window.innerWidth || y > window.innerHeight) {
+                logAction(`Warning: (${x}, ${y}) is outside viewport bounds!`, 'text-red-400');
+            }
+
+            // Simulate the coordinate click visual marker
+            addMarker(x, y, true);
+            
+            // Check if coordinates correspond to the target checkbox location
+            // We give a small programmatic margin of error of 16px surrounding target center for checkbox clicks
+            const dx = Math.abs(x - targetPosition.x);
+            const dy = Math.abs(y - targetPosition.y);
+            
+            if (isTargetActive && dx <= 16 && dy <= 16) {
+                const cb = document.getElementById('target-checkbox');
+                if (cb && !cb.checked) {
+                    cb.checked = true;
+                    // Trigger dispatch change
+                    const event = new Event('change');
+                    cb.dispatchEvent(event);
+                    logAction('Simulated programmatic click landed on active checkbox!', 'text-emerald-400 font-bold');
+                }
+            }
+        });
+
+        // Clear Log UI button
+        document.getElementById('clear-log-btn').addEventListener('click', function() {
+            const panel = document.getElementById('log-panel');
+            if (panel) panel.innerHTML = '<div class="text-gray-500">&gt; Log cleared. Ready.</div>';
+        });
+
+        // Auto-refresh layout coordinates dynamically if window changes size
+        window.addEventListener('resize', () => {
+            updateRulerLabels();
+        });
+
+        // Initialize System Setup
+        window.onload = function() {
+            updateRulerLabels();
+            logAction('Pixel grid system rendering completed.');
+            logAction(`Viewport active at ${window.innerWidth} x ${window.innerHeight} pixels.`);
+        }
+    </script>
+</body>
+</html>

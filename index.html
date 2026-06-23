@@ -69,21 +69,8 @@
             <!-- Interactive Checkbox centered EXACTLY at (0,0) offset -->
             <input type="checkbox" id="target-checkbox" class="absolute -translate-x-1/2 -translate-y-1/2 w-7 h-7 rounded-lg border-2 border-emerald-500 text-emerald-600 focus:ring-emerald-400 cursor-pointer accent-emerald-500 z-10 pointer-events-auto shadow-md transition-transform active:scale-90">
             
-            <!-- Interactive 8x8 Pixel Art Duck centered EXACTLY at (0,0) offset -->
-            <div id="target-duck" class="absolute -translate-x-1/2 -translate-y-1/2 cursor-pointer z-10 pointer-events-auto active:scale-90 transition-transform flex items-center justify-center select-none" style="display: none; width: 8px; height: 8px;">
-                <svg width="8" height="8" viewBox="0 0 8 8" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges">
-                    <!-- Head -->
-                    <rect x="3" y="1" width="3" height="3" fill="#FBBF24"/>
-                    <!-- Eye -->
-                    <rect x="4" y="2" width="1" height="1" fill="#000000"/>
-                    <!-- Beak -->
-                    <rect x="6" y="2" width="1" height="1" fill="#F97316"/>
-                    <!-- Body -->
-                    <rect x="1" y="4" width="6" height="3" fill="#FBBF24"/>
-                    <!-- Wing -->
-                    <rect x="2" y="5" width="2" height="1" fill="#D97706"/>
-                </svg>
-            </div>
+            <!-- Interactive 10x10 Checkbox centered EXACTLY at (0,0) offset -->
+            <input type="checkbox" id="target-tiny-checkbox" class="absolute -translate-x-1/2 -translate-y-1/2 w-[10px] h-[10px] rounded border border-amber-500 text-amber-600 focus:ring-0 cursor-pointer accent-amber-500 z-10 pointer-events-auto shadow-sm transition-transform active:scale-90" style="display: none;">
 
             <!-- Subtle pulsing center validation ring -->
             <div class="absolute -translate-x-1/2 -translate-y-1/2 w-10 h-10 bg-emerald-400/25 rounded-full animate-ping pointer-events-none"></div>
@@ -168,8 +155,8 @@
         </button>
 
         <button id="test-tiny-btn" class="bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white font-semibold px-3 py-1.5 rounded-lg text-xs transition duration-150 shadow-sm flex items-center gap-1.5">
-            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 2a4 4 0 0 1 4 4v1h3a2 2 0 0 1 2 2v2a4 4 0 0 1-4 4h-1v1a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4v-1H3a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h3V6a4 4 0 0 1 4-4h2z"/></svg>
-            Test Tiny Target
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            Test Tiny Checkbox
         </button>
         
         <button id="reset-btn" class="bg-gray-50 hover:bg-gray-150 active:bg-gray-200 text-gray-700 font-semibold px-3 py-1.5 rounded-lg text-xs transition duration-150 border border-gray-350 shadow-sm flex items-center gap-1.5">
@@ -254,7 +241,7 @@
         let clickCount = 0;
         let targetPosition = { x: 0, y: 0 };
         let isTargetActive = false;
-        let currentTargetType = 'checkbox'; // 'checkbox' | 'duck'
+        let currentTargetType = 'checkbox'; // 'checkbox' | 'tiny'
 
         // Visual Coordinates Label System
         function updateRulerLabels() {
@@ -383,13 +370,13 @@
             addMarker(e.clientX, e.clientY, false);
         });
 
-        // Initialize / Reposition active target Checkbox or Duck
+        // Initialize / Reposition active target Checkbox or Tiny Checkbox
         function spawnTarget(type = 'checkbox') {
             const targetElement = document.getElementById('target-container');
             const checkbox = document.getElementById('target-checkbox');
-            const duck = document.getElementById('target-duck');
+            const tinyCheckbox = document.getElementById('target-tiny-checkbox');
             const titleLabel = document.getElementById('target-title-label');
-            if (!targetElement || !checkbox || !duck) return;
+            if (!targetElement || !checkbox || !tinyCheckbox) return;
             
             // Generate position
             targetPosition = getRandomPosition();
@@ -398,17 +385,18 @@
 
             // Reset target states and background
             checkbox.checked = false;
+            tinyCheckbox.checked = false;
             document.body.classList.remove('success-state');
 
             // Toggle visibility of nested targets
             if (type === 'checkbox') {
                 checkbox.style.display = 'block';
-                duck.style.display = 'none';
+                tinyCheckbox.style.display = 'none';
                 if (titleLabel) titleLabel.innerText = "Target Center (Checkbox)";
-            } else if (type === 'duck') {
+            } else if (type === 'tiny') {
                 checkbox.style.display = 'none';
-                duck.style.display = 'block';
-                if (titleLabel) titleLabel.innerText = "Tiny Duck (8x8 px)";
+                tinyCheckbox.style.display = 'block';
+                if (titleLabel) titleLabel.innerText = "Tiny Checkbox (10x10 px)";
             }
 
             // Apply positions
@@ -439,13 +427,15 @@
             }
         });
 
-        // Success Duck Click State Handler
-        document.getElementById('target-duck').addEventListener('click', function(e) {
-            // Note: Since target-container doesn't stop propagation, it bubbles to viewport to draw the green crosshair as well!
-            if (!document.body.classList.contains('success-state')) {
+        // Success Tiny Checkbox Change State Handler
+        document.getElementById('target-tiny-checkbox').addEventListener('change', function(e) {
+            if (e.target.checked) {
                 document.body.classList.add('success-state');
                 playSound('success');
-                logAction(`TINY DUCK TARGET SUCCESSFULLY CLICKED AT (${targetPosition.x}, ${targetPosition.y})!`, 'text-green-500 font-bold bg-green-950/20 px-1 rounded');
+                logAction(`TINY CHECKBOX SUCCESSFULLY CHECKED AT (${targetPosition.x}, ${targetPosition.y})!`, 'text-green-500 font-bold bg-green-950/20 px-1 rounded');
+            } else {
+                document.body.classList.remove('success-state');
+                logAction('Tiny checkbox unchecked.', 'text-gray-400');
             }
         });
 
@@ -475,9 +465,9 @@
             spawnTarget('checkbox');
         });
 
-        // Tiny Duck Target Spawn Trigger
+        // Tiny Checkbox Target Spawn Trigger
         document.getElementById('test-tiny-btn').addEventListener('click', function() {
-            spawnTarget('duck');
+            spawnTarget('tiny');
         });
 
         // Reset All Controls
@@ -536,12 +526,14 @@
                         cb.dispatchEvent(event);
                         logAction('Simulated programmatic click landed on active checkbox!', 'text-emerald-400 font-bold');
                     }
-                } else if (currentTargetType === 'duck' && dx <= 6 && dy <= 6) {
-                    // Turn background green and trigger success
-                    if (!document.body.classList.contains('success-state')) {
-                        document.body.classList.add('success-state');
-                        playSound('success');
-                        logAction('Simulated programmatic click landed on active tiny duck!', 'text-emerald-400 font-bold');
+                } else if (currentTargetType === 'tiny' && dx <= 5 && dy <= 5) {
+                    const cb = document.getElementById('target-tiny-checkbox');
+                    if (cb && !cb.checked) {
+                        cb.checked = true;
+                        // Trigger dispatch change
+                        const event = new Event('change');
+                        cb.dispatchEvent(event);
+                        logAction('Simulated programmatic click landed on active tiny checkbox!', 'text-emerald-400 font-bold');
                     }
                 }
             }

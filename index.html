@@ -357,7 +357,7 @@
             playSound('click');
             
             const originStr = isProgrammatic ? "Programmatic injection" : "User/Agent click";
-            logAction(`${originStr} recorded at (${x}, ${y})`, 'text-indigo-400');
+            logAction(`${originStr} recorded at (${x}, ${y})`, 'text-indigo-450');
         }
 
         // Handle viewport-wide clicking
@@ -470,7 +470,7 @@
             spawnTarget('tiny');
         });
 
-        // Reset All Controls
+        // Reset All Controls (Respects the currently selected/active target type)
         document.getElementById('reset-btn').addEventListener('click', function() {
             // Clean markers
             const layer = document.getElementById('markers-layer');
@@ -486,10 +486,10 @@
             // Clean success background to default
             document.body.classList.remove('success-state');
 
-            // Force spawn a fresh randomized standard target
-            spawnTarget('checkbox');
+            // Force spawn a fresh randomized target of the CURRENT active type
+            spawnTarget(currentTargetType);
 
-            logAction('Arena cleared and reset completed.', 'text-amber-500');
+            logAction(`Arena cleared. Reset completed for active type: [${currentTargetType}].`, 'text-amber-500');
         });
 
         // Debug programmatic coordinate injection 
